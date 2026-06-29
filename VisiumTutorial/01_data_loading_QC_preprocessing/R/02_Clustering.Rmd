@@ -1,0 +1,150 @@
+---
+title: "02 - Clustering"
+---
+
+## Load libraries
+
+```{r, message=FALSE}
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+```
+
+## Prepare output folders
+
+```{r}
+dir.create("../output/plots/02_Clustering", recursive = TRUE, showWarnings = FALSE)
+dir.create("../data/spatial_rds_task", recursive = TRUE, showWarnings = FALSE)
+```
+
+## Load the QC-filtered object
+
+```{r}
+# This object was created at the end of lesson 1.
+seurat_object <- readRDS("../data/spatial_rds_task/1_tonsil_qc_performed.rds")
+
+# Work with the spatial expression assay.
+DefaultAssay(seurat_object) <- "Spatial"
+```
+
+## Create a new assay
+
+```{r}
+# Transform the raw counts using log1p and wrap them into a new Seurat assay for downstream use.
+
+# ##################################################
+# Get the log1p data
+log1p_data <- seurat_object@assays[["Spatial"]]@layers[["counts"]] %>% log1p()
+
+# ##################################################
+# Create assay object
+log1p_assay <- CreateAssayObject(data = log1p_data)
+```
+
+```{r, warning=FALSE}
+# Add the new log1p assay to the object and set it as default for upcoming steps.
+# ##################################################
+# Create new seurat assay from the log1p data
+seurat_object[["log1p"]] <- log1p_assay
+
+# Set the default assay to the "log1p" for the pca calculation
+DefaultAssay(seurat_object) <- "log1p"
+```
+
+## Scale the data
+
+```{r}
+# Scale the data to normalize variance across genes before PCA.
+# ##################################################
+# Define all gene names as variables. NOTE: In some tutorials you will see the usage of Highly variable genes only.
+all_genes <- rownames(seurat_object)
+
+# Scale the data prior to dimensional reduction (eg. PCA)
+seurat_object <- ScaleData(seurat_object, features = all_genes)
+```
+
+## Dimensionality reduction, clustering, and visualization
+
+```{r}
+# Run PCA on log1p-transformed data to reduce dimensionality and condense information.
+# ##################################################
+# Run PCA
+seurat_object <- RunPCA(seurat_object, assay = "log1p", verbose = FALSE, features = rownames(seurat_object), npcs=50)
+```
+
+
+## Inspect PCA
+
+```{r}
+# The elbow plot helps us choose how many PCs to use for clustering.
+p_elbow <- ElbowPlot(seurat_object, ndims = 30)
+p_elbow
+
+ggsave("../output/plots/02_Clustering/elbow_plot.png", plot = p_elbow, width = 6, height = 4)
+```
+
+## Find clusters
+
+```{r}
+# Use the first 20 PCs for this beginner tutorial.
+# The resolution controls how fine or coarse the clusters are.
+pcs_to_use <- 1:20
+cluster_resolution <- 0.8
+
+seurat_object <- FindNeighbors(seurat_object, dims = pcs_to_use)
+seurat_object <- FindClusters(seurat_object,
+  resolution = cluster_resolution,
+  algorithm = 2)
+```
+
+Remark: In practice we would recommend using leiden (algorithm = 4) clustering instead of louvain (algorithm = 2).
+Because Leiden requires extra python package installation.
+Therefore we stick to Louvain for the sake of simplicity in this workshop.
+
+## TASK 2: Try another clustering resolution
+
+Change `cluster_resolution` to `0.2` or `0.8`, rerun the clustering step, and compare the number of clusters.
+
+Questions:
+
+- What happens when the resolution is lower?
+- What happens when the resolution is higher?
+- Which resolution gives clusters that look spatially coherent?
+
+## Run UMAP
+
+```{r}
+# UMAP places similar spots close together in a two-dimensional plot.
+seurat_object <- RunUMAP(seurat_object, dims = pcs_to_use)
+```
+
+## Visualize clusters
+
+```{r}
+# UMAP view: spots close together have similar expression profiles.
+p_umap <- DimPlot(seurat_object, reduction = "umap", group.by = "seurat_clusters", label = TRUE) +
+  NoLegend()
+p_umap
+
+ggsave("../output/plots/02_Clustering/umap_clusters.png", plot = p_umap, width = 6, height = 5)
+```
+
+```{r}
+# Spatial view: the same clusters shown on the tissue image.
+p_spatial_clusters <- SpatialDimPlot(seurat_object, group.by = "seurat_clusters", label = TRUE, label.size = 3)
+p_spatial_clusters
+
+ggsave("../output/plots/02_Clustering/spatial_clusters.png", plot = p_spatial_clusters, width = 8, height = 7)
+```
+
+## Save the clustered object
+
+```{r}
+# Save this object for marker analysis in lesson 3.
+saveRDS(seurat_object, "../data/spatial_rds_task/2_tonsil_clustered.rds")
+```
+
+## Handoff to lesson 3
+
+In the next lesson, we will load `../data/spatial_rds_task/2_tonsil_clustered.rds` and find marker genes for each cluster.

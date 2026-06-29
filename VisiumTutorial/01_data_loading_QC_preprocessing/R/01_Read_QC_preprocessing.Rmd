@@ -1,0 +1,179 @@
+---
+title: "01 - Read data, preprocessing, and QC"
+---
+
+## Load libraries
+
+```{r, message=FALSE}
+# Load libraries for spatial transcriptomics processing, plotting, and data manipulation.
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+```
+
+## Prepare output folders
+
+```{r}
+# These folders store the plots and Seurat objects created by this lesson.
+dir.create("../output/plots/01_Data_processing_and_QC", recursive = TRUE, showWarnings = FALSE)
+dir.create("../data/spatial_rds_task", recursive = TRUE, showWarnings = FALSE)
+```
+
+## Load data
+
+Public data have been downloaded from 10x Genomics (https://www.10xgenomics.com/datasets) and stored in the `../data/visium/BCLL_10_T` folder.
+The data is in the standard 10x Genomics format, which includes a `filtered_feature_bc_matrix` folder and a `spatial` folder with the tissue image and spatial coordinates.
+
+```{r}
+# Load the 10x Visium dataset.
+seurat_object <- Load10X_Spatial("../data/visium/BCLL_10_T")
+
+# Adjust the low-resolution scale factor to match the high-resolution scale factor.
+# This helps the tissue image and spots align correctly for this dataset.
+seurat_object@images[["slice1"]]@scale.factors[["lowres"]] <- seurat_object@images[["slice1"]]@scale.factors[["hires"]]
+```
+
+------------------------------------
+
+# QC and data preprocessing
+## Get QC metrics
+
+```{r}
+# Regex variables.
+# ##################################################
+# Define regex patterns to identify mitochondrial and ribosomal genes.
+mt_regex <- "^MT-"
+ribo_regex <- "^RP[SL]"
+```
+
+
+```{r}
+# Calculate mitochondrial content.
+# ##################################################
+# Calculate the percentage of mitochondrial gene expression per spot for QC.
+seurat_object <- PercentageFeatureSet(seurat_object, pattern = mt_regex, col.name = "percent_mt")
+
+# Calculate ribosomal content.
+# ##################################################
+# Calculate the percentage of ribosomal gene expression per spot for QC.
+seurat_object <- PercentageFeatureSet(seurat_object, pattern = ribo_regex, col.name = "percent_ribo")
+
+```
+
+## TASK 1: Identify informative gene sets
+
+We have used **mitochondrial genes** and **ribosomal genes** for quality control and visualization. Now it is your turn to think beyond them.
+
+## Plot QC metrics
+
+```{r}
+# Generate QC metric plots.
+# ##################################################
+# Visualize total counts, number of detected genes, and percentage of mitochondrial/ribosomal transcripts.
+# ----------
+# nCount_Spatial plot
+# ----------
+plot1 <- VlnPlot(seurat_object, features = "nCount_Spatial", pt.size = 0.1) +
+         NoLegend() + theme_bw() + theme(legend.position = "none")
+
+# ----------
+# nFeature_Spatial plot
+# ----------
+plot2 <- VlnPlot(...)
+
+# ----------
+# percent_mt plot
+# ----------
+plot3 <- VlnPlot(...)
+
+# ----------
+# percent_ribo plot
+# ----------
+plot4 <- VlnPlot(...)
+
+
+# ##################################################
+# Arrange all plots.
+(plot1 | plot2 | plot3 | plot4)
+
+```
+
+## Perform QC
+
+```{r, warning=FALSE}
+# Remove non-informative genes.
+# ##################################################
+# Remove genes used for QC to avoid biasing downstream analysis.
+
+# Combine regex patterns with "|" to mean "or".
+regex_remove_genes <- paste0(mt_regex, "|", ribo_regex)
+
+# Extract all genes to exclude.
+remove_me <- rownames(seurat_object)[grepl(regex_remove_genes, rownames(seurat_object))]
+
+# Keep all genes that are not in remove_me.
+seurat_object <- subset(seurat_object, features = rownames(seurat_object)[!rownames(seurat_object) %in% remove_me])
+
+# ##################################################
+# Subset spots from the Seurat object based on selected thresholds.
+nFeature_Spatial_threshold_lower <- 300
+nCount_Spatial_threshold_lower <- 300
+percent_mt_threshold <- 5
+
+seurat_object_size_before <- dim(seurat_object)
+
+
+# Subset the Seurat object based on the thresholds defined above.
+seurat_object <- subset(seurat_object,
+                        subset = ...
+                        )
+
+```
+
+Compare the number of spots before and after QC filtering.
+```{r, warning=FALSE}
+seurat_object_size_after <- ...
+
+
+```
+
+
+## Spatial feature plots
+
+```{r}
+# Create spatial plots to inspect QC metrics.
+# ##################################################
+# Visualize the QC metrics in a spatial context.
+p <- SpatialFeaturePlot(seurat_object, features = c("nCount_Spatial"))
+print(p)
+
+ggsave("../output/plots/01_Data_processing_and_QC/spatial_qc_metrics.png", plot = p, width = 10, height = 8)
+```
+
+Check other features like nFeature_Spatial, percent_mt...
+```{r}
+# Create spatial plots to inspect QC metrics.
+# ##################################################
+# Visualize the QC metrics in a spatial context.
+p <- SpatialFeaturePlot(...)
+print(p)
+```
+
+### Some additional steps to make life easier later on
+
+```{r}
+# ##################################################
+# Fix the layer dimension names. This makes later Seurat v5 steps more reliable.
+seurat_object@assays[["Spatial"]]@layers[["counts"]]@Dimnames[[2]] <- colnames(seurat_object@assays[["Spatial"]])
+seurat_object@assays[["Spatial"]]@layers[["counts"]]@Dimnames[[1]] <- rownames(seurat_object@assays[["Spatial"]])
+
+# ##################################################
+# Save the Seurat object for lesson 2.
+saveRDS(seurat_object, "../data/spatial_rds_task/1_tonsil_qc_performed.rds")
+```
+
+## Handoff to lesson 2
+
+In the next lesson, we will load `../data/spatial_rds_task/1_tonsil_qc_performed.rds` and use it for normalization, PCA, clustering, and spatial cluster visualization.
+

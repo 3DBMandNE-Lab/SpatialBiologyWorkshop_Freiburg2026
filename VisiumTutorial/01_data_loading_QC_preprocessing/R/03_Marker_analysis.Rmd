@@ -1,0 +1,120 @@
+---
+title: "03 - Marker analysis"
+---
+
+## Load libraries
+
+```{r, message=FALSE}
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+```
+
+## Prepare output folders
+
+```{r}
+dir.create("../output/plots/03_Marker_analysis", recursive = TRUE, showWarnings = FALSE)
+dir.create("../output/tables", recursive = TRUE, showWarnings = FALSE)
+```
+
+## Load the clustered object
+
+```{r}
+# This object was created at the end of lesson 2.
+seurat_object <- readRDS("../data/spatial_rds_task/2_tonsil_clustered.rds")
+
+DefaultAssay(seurat_object) <- "Spatial"
+Idents(seurat_object) <- "seurat_clusters"
+```
+
+## Find cluster marker genes
+
+```{r}
+# Find genes that are enriched in each cluster compared with all other clusters.
+cluster_markers <- FindAllMarkers(
+  seurat_object,
+  only.pos = TRUE
+)
+
+head(cluster_markers)
+```
+
+Check logfc.threshold and min.pct parameters in the `FindAllMarkers()` function to adjust the stringency of marker detection.
+Run the function with different parameters to see how the number of detected markers changes.
+
+
+## Save marker table
+
+```{r}
+# Save the full marker table for later inspection.
+write.csv(cluster_markers, "../output/tables/03_cluster_markers.csv", row.names = FALSE)
+```
+
+## Inspect top markers
+
+```{r}
+# Select the top 5 marker genes per cluster.
+top_markers <- cluster_markers %>%
+  group_by(cluster) %>%
+  slice_max(n = 5, order_by = avg_log2FC) %>%
+  ungroup()
+
+top_markers
+```
+
+```{r}
+# Pick a few top marker genes to visualize.
+marker_genes <- unique(top_markers$gene)
+marker_genes <- marker_genes[1:min(4, length(marker_genes))]
+
+marker_genes
+```
+
+## Visualize marker expression
+
+```{r}
+# UMAP expression view for selected marker genes.
+p_feature <- FeaturePlot(seurat_object, features = marker_genes, reduction = "umap", ncol = 2)
+p_feature
+
+ggsave("../output/plots/03_Marker_analysis/umap_marker_features.png", plot = p_feature, width = 10, height = 8)
+```
+
+```{r}
+# Violin plots compare expression across clusters.
+p_violin <- VlnPlot(seurat_object, features = marker_genes, pt.size = 0, ncol = 2)
+p_violin
+
+ggsave("../output/plots/03_Marker_analysis/violin_marker_features.png", plot = p_violin, width = 10, height = 8)
+```
+
+```{r}
+# Spatial plots show where marker genes are expressed in the tissue.
+p_spatial_markers <- SpatialFeaturePlot(seurat_object, features = marker_genes, ncol = 2)
+p_spatial_markers
+
+ggsave("../output/plots/03_Marker_analysis/spatial_marker_features.png", plot = p_spatial_markers, width = 10, height = 8)
+```
+
+## TASK 3: Interpret one cluster
+
+Choose one cluster and inspect its top marker genes.
+
+Questions:
+
+- Which genes are most enriched in your chosen cluster?
+- Where is the cluster located in the tissue?
+- Do the marker genes suggest a possible biological identity or tissue region?
+
+Choose one marker gene from the table and make your own `SpatialFeaturePlot()` for it.
+
+
+## Optional task
+
+Instead of comparing one cluster to all other clusters, you can also compare two specific clusters. Use the `FindMarkers()` function to do this.
+Choose 2 clusters and compare them. What are the top marker genes that distinguish these two clusters?
+
+```{r}
+FindMarkers(...)
+```
