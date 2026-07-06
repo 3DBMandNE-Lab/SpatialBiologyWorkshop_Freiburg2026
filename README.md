@@ -65,10 +65,6 @@ git clone https://github.com/3DBMandNE-Lab/SpatialBiologyWorkshop_Freiburg2026.g
 
 Then open the repository in RStudio and follow the tutorial-specific instructions inside each folder.
 
-## External data
-
-Some tutorial datasets may be hosted externally because of file size. See the tutorial-specific folders for links and download instructions.
-
 ## License
 
 This repository is released under the MIT License. See `LICENSE` for details.
